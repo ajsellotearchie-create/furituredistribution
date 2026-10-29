@@ -14,6 +14,7 @@ public class AdminMenu {
     private final Scanner sc;
     private final FurnitureDao furnitureDao = new FurnitureDao();
     private final UserAdminDao userAdminDao = new UserAdminDao();
+    private final UserDao userDao = new UserDao();
     private final ReportDao reportDao = new ReportDao();
     private final ActivityLogDao logDao = new ActivityLogDao();
 
@@ -158,7 +159,7 @@ public class AdminMenu {
             System.out.println("=============================");
             System.out.println("1. View all users");
             System.out.println("2. Approve pending users");
-            System.out.println("3. Change role");
+            System.out.println("3. Update user role & status");
             System.out.println("4. Delete user");
             System.out.println("5. Back");
             System.out.println("=============================");
@@ -167,7 +168,7 @@ public class AdminMenu {
             switch (sc.nextLine().trim()) {
                 case "1" -> printUsers();
                 case "2" -> approvePendingUsers();
-                case "3" -> changeRole();
+                case "3" -> updateUserRoleAndStatus();
                 case "4" -> {
                     if (deleteUser()) {
                         return true; // Signal back to show() that the user deleted themselves and needs to log out
@@ -210,7 +211,7 @@ public class AdminMenu {
             System.out.printf("%-5d %-15s %-25s %-12s%n", u.user_id(), u.username(), u.full_name(), u.roles());
         }
 
-        int id = readInt("Enter User ID to approve (0 to cancel): ");
+        int id = readIntInput("Enter User ID to approve (0 to cancel): ");
         if (id == 0) return;
 
         boolean found = pendingUsers.stream().anyMatch(u -> u.user_id() == id);
@@ -227,27 +228,56 @@ public class AdminMenu {
         }
     }
 
-    private void changeRole() {
-        int id = readInt("User ID: ");
-        if (id == user.user_id()) {
-            System.out.println("You cannot change your own role.\n");
+    // Updates another user's role and status. Enter 0 at any step to cancel.
+    private void updateUserRoleAndStatus() {
+        printUsers();
+        int targetUserId = readIntInput("Enter User ID to update (0 to cancel): ");
+        if (targetUserId == 0) {
+            System.out.println("Update cancelled.\n");
             return;
         }
-        String role = readText("New role (admin / warehouse): ", false).toLowerCase();
-        if (!role.equals("admin") && !role.equals("warehouse")) {
-            System.out.println("Role must be admin or warehouse.\n");
+
+        // Self-edit restriction
+        if (targetUserId == user.user_id()) {
+            System.out.println("WARNING: Modifying the currently active admin account is restricted.\n");
             return;
         }
-        if (userAdminDao.updateRole(id, role)) {
-            logDao.log(user.user_id(), "CHANGE_ROLE", id, "Set role of user #" + id + " to " + role);
-            System.out.println("Role updated successfully.\n");
+
+        boolean exists = userAdminDao.getAllUsers().stream()
+                .anyMatch(u -> u.user_id() == targetUserId);
+        if (!exists) {
+            System.out.println("User not found.\n");
+            return;
+        }
+
+        String newRole = readValidRole();
+        if (newRole == null) {
+            System.out.println("Update cancelled.\n");
+            return;
+        }
+
+        String newStatus = readValidStatus();
+        if (newStatus == null) {
+            System.out.println("Update cancelled.\n");
+            return;
+        }
+
+        if (userDao.updateUserRoleAndStatus(targetUserId, newRole, newStatus)) {
+            logDao.log(user.user_id(), "UPDATE_USER", targetUserId,
+                    "Set user #" + targetUserId + " to role " + newRole + ", status " + newStatus);
+            System.out.println("User #" + targetUserId + " updated successfully: role=" + newRole
+                    + ", status=" + newStatus + ".\n");
         } else {
-            System.out.println("User not found or update failed.\n");
+            System.out.println("Update failed.\n");
         }
     }
 
     private boolean deleteUser() {
-        int id = readInt("User ID to delete: ");
+        int id = readIntInput("User ID to delete (0 to cancel): ");
+        if (id == 0) {
+            System.out.println("Cancelled.\n");
+            return false;
+        }
 
         System.out.print("Delete user #" + id + "? (y/n): ");
         if (!sc.nextLine().trim().equalsIgnoreCase("y")) {
@@ -335,6 +365,40 @@ public class AdminMenu {
             } catch (NumberFormatException e) {
                 System.out.println("Please enter a whole number.");
             }
+        }
+    }
+
+    // Validation wrapper: keeps asking until a whole number is entered (no crash on letters/symbols)
+    private int readIntInput(String prompt) {
+        while (true) {
+            System.out.print(prompt);
+            try {
+                return Integer.parseInt(sc.nextLine().trim());
+            } catch (NumberFormatException e) {
+                System.out.println("Invalid input. Please enter a whole number.");
+            }
+        }
+    }
+
+    // Validation wrapper: returns ADMIN or WAREHOUSE, or null if the admin types 0 to cancel
+    private String readValidRole() {
+        while (true) {
+            System.out.print("New role (ADMIN / WAREHOUSE, 0 to cancel): ");
+            String input = sc.nextLine().trim().toUpperCase();
+            if (input.equals("0")) return null;
+            if (input.equals("ADMIN") || input.equals("WAREHOUSE")) return input;
+            System.out.println("Invalid role. Valid roles: ADMIN, WAREHOUSE.");
+        }
+    }
+
+    // Validation wrapper: returns APPROVED or PENDING, or null if the admin types 0 to cancel
+    private String readValidStatus() {
+        while (true) {
+            System.out.print("New status (APPROVED / PENDING, 0 to cancel): ");
+            String input = sc.nextLine().trim().toUpperCase();
+            if (input.equals("0")) return null;
+            if (input.equals("APPROVED") || input.equals("PENDING")) return input;
+            System.out.println("Invalid status. Valid statuses: APPROVED, PENDING.");
         }
     }
 
