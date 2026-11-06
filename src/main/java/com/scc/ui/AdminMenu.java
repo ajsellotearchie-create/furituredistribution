@@ -42,6 +42,7 @@ public class AdminMenu {
             switch (sc.nextLine().trim()) {
                 case "1" -> manageFurniture();
                 case "2" -> {
+                    // If manageUsers returns true, the admin deleted their own account and must log out
                     if (manageUsers()) {
                         loggedIn = false;
                     }
@@ -49,7 +50,6 @@ public class AdminMenu {
                 case "3" -> viewReports();
                 case "4" -> viewAuditLogs();
                 case "5" -> {
-                    int id = 0;
                     logDao.logAction(user.user_id(), "LOGOUT",
                             "User " + user.username() + " (ID: " + user.user_id() + ") logged out.");
                     System.out.println("Logged out successfully.\n");
@@ -141,7 +141,6 @@ public class AdminMenu {
         if (id > 0) {
             logDao.logAction(user.user_id(), "FURNITURE_ADDED",
                     "Admin " + user.user_id() + " added " + name + " (ID " + id + ", stock " + stock + ")");
-
             System.out.println("Item added with ID " + id + ".");
         } else {
             System.out.println("Could not add item.");
@@ -197,7 +196,6 @@ public class AdminMenu {
         if (furnitureDao.deleteItem(id)) {
             logDao.logAction(user.user_id(), "FURNITURE_DELETED",
                     "Admin " + user.user_id() + " deleted " + item.itemName() + " (ID " + id + ")");
-
             System.out.println("Item deleted.");
         }
     }
@@ -294,13 +292,6 @@ public class AdminMenu {
             System.out.println("WARNING: Modifying the currently active admin account is restricted.\n");
             return;
         }
-<<<<<<< HEAD
-        if (userAdminDao.updateRole(id, role)) {
-            logDao.logAction(user.user_id(), "USER_UPDATED",
-                    "Admin " + user.user_id() + " changed role of User " + id + " to " + role.toUpperCase());
-
-            System.out.println("Role updated successfully.\n");
-=======
 
         boolean exists = userAdminDao.getAllUsers().stream()
                 .anyMatch(u -> u.user_id() == targetUserId);
@@ -322,11 +313,11 @@ public class AdminMenu {
         }
 
         if (userDao.updateUserRoleAndStatus(targetUserId, newRole, newStatus)) {
-            logDao.log(user.user_id(), "UPDATE_USER", targetUserId,
-                    "Set user #" + targetUserId + " to role " + newRole + ", status " + newStatus);
+            logDao.logAction(user.user_id(), "USER_UPDATED",
+                    "Admin " + user.user_id() + " set User " + targetUserId
+                            + " to role " + newRole + ", status " + newStatus);
             System.out.println("User #" + targetUserId + " updated successfully: role=" + newRole
                     + ", status=" + newStatus + ".\n");
->>>>>>> 166ece63658bcdc4312e309df1254b943da17aab
         } else {
             System.out.println("Update failed.\n");
         }
