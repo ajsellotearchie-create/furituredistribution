@@ -9,6 +9,8 @@ import java.sql.SQLException;
 
 public class UserDao {
 
+    private final ActivityLogDao logDao = new ActivityLogDao();
+
     public boolean registerUser(String username, String password, String fullName, String role) {
         // Check if the role is admin; if so, set status to 'active', otherwise 'pending'
         String status = role.equalsIgnoreCase("admin") ? "active" : "pending";
@@ -42,6 +44,7 @@ public class UserDao {
     public User login(String username, String password) {
         String sql = "SELECT user_id, username, password, full_name, roles, status " +
                 "FROM Users WHERE username = ? AND password = ?";
+        User found = null;
 
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -53,13 +56,12 @@ public class UserDao {
                 if (rs.next()) {
                     String status = rs.getString("status");
 
-                    // Check if account is still pending approval
                     if (status != null && status.equalsIgnoreCase("pending")) {
                         System.out.println("Login failed: Your account is pending admin approval.\n");
                         return null;
                     }
 
-                    return new User(
+                    found = new User(
                             rs.getInt("user_id"),
                             rs.getString("username"),
                             rs.getString("password"),
@@ -71,6 +73,12 @@ public class UserDao {
         } catch (SQLException e) {
             System.err.println("Login failed: " + e.getMessage());
         }
-        return null;
+
+        // Connection is closed here, so the log insert can't hit a lock
+        if (found != null) {
+            logDao.logAction(found.user_id(), "LOGIN",
+                    "User " + found.username() + " (ID: " + found.user_id() + ") logged in.");
+        }
+        return found;
     }
 }

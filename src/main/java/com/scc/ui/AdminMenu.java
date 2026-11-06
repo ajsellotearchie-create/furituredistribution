@@ -1,6 +1,7 @@
 package com.scc.ui;
 
 import com.scc.dao.*;
+import com.scc.model.ActivityLog;
 import com.scc.model.FurnitureItem;
 import com.scc.model.User;
 
@@ -12,10 +13,10 @@ public class AdminMenu {
 
     private final User user;
     private final Scanner sc;
+    private final ActivityLogDao logDao = new ActivityLogDao();
     private final FurnitureDao furnitureDao = new FurnitureDao();
     private final UserAdminDao userAdminDao = new UserAdminDao();
     private final ReportDao reportDao = new ReportDao();
-    private final ActivityLogDao logDao = new ActivityLogDao();
 
     // The Scanner is passed in so the whole app shares one Scanner on System.in
     public AdminMenu(User user, Scanner sc) {
@@ -33,26 +34,71 @@ public class AdminMenu {
             System.out.println("1. Manage Furniture");
             System.out.println("2. Manage Users");
             System.out.println("3. View Reports");
-            System.out.println("4. Log out");
+            System.out.println("4. View System Audit Logs");
+            System.out.println("5. Log out");
             System.out.print("Choose an option: ");
 
             switch (sc.nextLine().trim()) {
                 case "1" -> manageFurniture();
                 case "2" -> {
-                    // If manageUsers returns true, it means the admin deleted their own account and we need to log out
                     if (manageUsers()) {
                         loggedIn = false;
                     }
                 }
                 case "3" -> viewReports();
-                case "4" -> {
-                    logDao.log(user.user_id(), "LOGOUT", user.user_id(), user.username() + " logged out");
+                case "4" -> viewAuditLogs();
+                case "5" -> {
+                    int id = 0;
+                    logDao.logAction(user.user_id(), "LOGOUT",
+                            "User " + user.username() + " (ID: " + user.user_id() + ") logged out.");
                     System.out.println("Logged out successfully.\n");
                     loggedIn = false;
                 }
                 default -> System.out.println("Invalid option. Try again.\n");
             }
         }
+    }
+
+    // ---------------- Audit Logs ----------------
+
+    private void viewAuditLogs() {
+        boolean back = false;
+        while (!back) {
+            System.out.println("=============================");
+            System.out.println("SYSTEM AUDIT LOGS");
+            System.out.println("1. View all system logs");
+            System.out.println("2. Filter logs by User ID");
+            System.out.println("3. Back");
+            System.out.println("=============================");
+            System.out.print("Choose: ");
+            switch (sc.nextLine().trim()) {
+                case "1" -> printLogs(logDao.getAllLogs());
+                case "2" -> printLogs(logDao.getLogsByUserId(readInt("User ID: ")));
+                case "3" -> back = true;
+                default -> System.out.println("Invalid option.");
+            }
+        }
+        System.out.println();
+    }
+
+    private void printLogs(List<ActivityLog> logs) {
+        if (logs.isEmpty()) {
+            System.out.println("No logs found.\n");
+            return;
+        }
+        String fmt = "%-5s | %-8s | %-18s | %-35s | %-20s%n";
+        System.out.printf(fmt, "ID", "User ID", "Action", "Description", "Timestamp");
+        System.out.println("-".repeat(98));
+        for (ActivityLog l : logs) {
+            System.out.printf(fmt, l.id(), l.userId(), l.actionType(),
+                    truncate(l.description(), 35), l.timestamp());
+        }
+        System.out.println();
+    }
+
+    private static String truncate(String s, int max) {
+        if (s == null) return "";
+        return s.length() <= max ? s : s.substring(0, max - 3) + "...";
     }
 
     // ---------------- Manage Furniture ----------------
@@ -92,7 +138,9 @@ public class AdminMenu {
         int id = furnitureDao.addItem(new FurnitureItem(0, name, category, dimensions, material,
                 price, stock, location));
         if (id > 0) {
-            logDao.log(user.user_id(), "ADD_FURNITURE", id, "Added " + name + " (stock " + stock + ")");
+            logDao.logAction(user.user_id(), "FURNITURE_ADDED",
+                    "Admin " + user.user_id() + " added " + name + " (ID " + id + ", stock " + stock + ")");
+
             System.out.println("Item added with ID " + id + ".");
         } else {
             System.out.println("Could not add item.");
@@ -125,7 +173,8 @@ public class AdminMenu {
         FurnitureItem updated = new FurnitureItem(id, name, category, dimensions, material,
                 price, old.stockQuantity(), location);
         if (furnitureDao.updateItem(updated)) {
-            logDao.log(user.user_id(), "EDIT_FURNITURE", id, "Edited " + name);
+            logDao.logAction(user.user_id(), "FURNITURE_UPDATED",
+                    "Admin " + user.user_id() + " edited " + name + " (ID " + id + ")");
             System.out.println("Item updated.");
         } else {
             System.out.println("Update failed.");
@@ -145,7 +194,9 @@ public class AdminMenu {
             return;
         }
         if (furnitureDao.deleteItem(id)) {
-            logDao.log(user.user_id(), "DELETE_FURNITURE", id, "Deleted " + item.itemName());
+            logDao.logAction(user.user_id(), "FURNITURE_DELETED",
+                    "Admin " + user.user_id() + " deleted " + item.itemName() + " (ID " + id + ")");
+
             System.out.println("Item deleted.");
         }
     }
@@ -220,7 +271,8 @@ public class AdminMenu {
         }
 
         if (userAdminDao.updateStatus(id, "approved")) {
-            logDao.log(user.user_id(), "APPROVE_USER", id, "Approved user account #" + id);
+            logDao.logAction(user.user_id(), "USER_APPROVED",
+                    "Admin " + user.user_id() + " approved account for User ID " + id);
             System.out.println("User account approved successfully.\n");
         } else {
             System.out.println("Approval failed.\n");
@@ -239,7 +291,9 @@ public class AdminMenu {
             return;
         }
         if (userAdminDao.updateRole(id, role)) {
-            logDao.log(user.user_id(), "CHANGE_ROLE", id, "Set role of user #" + id + " to " + role);
+            logDao.logAction(user.user_id(), "USER_UPDATED",
+                    "Admin " + user.user_id() + " changed role of User " + id + " to " + role.toUpperCase());
+
             System.out.println("Role updated successfully.\n");
         } else {
             System.out.println("User not found or update failed.\n");
@@ -258,7 +312,8 @@ public class AdminMenu {
         boolean isSelf = (id == user.user_id());
 
         if (userAdminDao.deleteUser(id)) {
-            logDao.log(user.user_id(), "DELETE_USER", id, "Deleted user #" + id);
+            logDao.logAction(user.user_id(), "USER_DELETED",
+                    "Admin " + user.user_id() + " deleted User ID " + id);
             System.out.println("User deleted successfully.\n");
 
             if (isSelf) {
@@ -286,9 +341,9 @@ public class AdminMenu {
         reportDao.ordersByStatus().forEach(System.out::println);
 
         System.out.println("\n--- Recent Activity (last 15) ---");
-        List<String> logs = logDao.getRecent(15);
-        if (logs.isEmpty()) System.out.println("No activity yet.");
-        else logs.forEach(System.out::println);
+        List<ActivityLog> recent = logDao.getAllLogs();
+        if (recent.isEmpty()) System.out.println("No activity yet.");
+        else printLogs(recent.subList(0, Math.min(15, recent.size())));
         System.out.println();
     }
 

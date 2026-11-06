@@ -1,22 +1,23 @@
 package com.scc.dao;
 
+import com.scc.model.ActivityLog;
+
 import java.sql.*;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+
 public class ActivityLogDao {
 
-    public boolean log(int userId, String eventType, int targetId, String description) {
-        String sql = "INSERT INTO ActivityLogs(user_id, event_type, target_id, description, timestamp) " +
-                "VALUES(?, ?, ?, ?, ?)";
+    public boolean logAction(int userId, String actionType, String description) {
+        String sql = "INSERT INTO ActivityLogs(user_id, action_type, description, timestamp) VALUES(?, ?, ?, ?)";
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement p = conn.prepareStatement(sql)) {
             p.setInt(1, userId);
-            p.setString(2, eventType);
-            p.setInt(3, targetId);
-            p.setString(4, description);
-            p.setString(5, LocalDateTime.now().withNano(0).toString());
+            p.setString(2, actionType);
+            p.setString(3, description);
+            p.setString(4, LocalDateTime.now().withNano(0).toString());
             p.executeUpdate();
             return true;
         } catch (SQLException e) {
@@ -25,26 +26,46 @@ public class ActivityLogDao {
         }
     }
 
-    // Newest first, formatted as ready-to-print lines
-    public List<String> getRecent(int limit) {
-        String sql = "SELECT l.timestamp, u.username, l.event_type, l.target_id, l.description " +
-                "FROM ActivityLogs l JOIN Users u ON u.user_id = l.user_id " +
-                "ORDER BY l.log_id DESC LIMIT ?";
-        List<String> lines = new ArrayList<>();
+    public List<ActivityLog> getAllLogs() {
+        String sql = "SELECT id, user_id, action_type, description, timestamp " +
+                "FROM ActivityLogs ORDER BY timestamp DESC, id DESC";
+        List<ActivityLog> logs = new ArrayList<>();
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement p = conn.prepareStatement(sql);
+             ResultSet rs = p.executeQuery()) {
+            while (rs.next()) {
+                logs.add(map(rs));
+            }
+        } catch (SQLException e) {
+            System.err.println("Could not load logs: " + e.getMessage());
+        }
+        return logs;
+    }
+
+    public List<ActivityLog> getLogsByUserId(int userId) {
+        String sql = "SELECT id, user_id, action_type, description, timestamp " +
+                "FROM ActivityLogs WHERE user_id = ? ORDER BY timestamp DESC, id DESC";
+        List<ActivityLog> logs = new ArrayList<>();
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement p = conn.prepareStatement(sql)) {
-            p.setInt(1, limit);
+            p.setInt(1, userId);
             try (ResultSet rs = p.executeQuery()) {
                 while (rs.next()) {
-                    lines.add(String.format("%-20s %-12s %-16s #%-4d %s",
-                            rs.getString("timestamp"), rs.getString("username"),
-                            rs.getString("event_type"), rs.getInt("target_id"),
-                            rs.getString("description")));
+                    logs.add(map(rs));
                 }
             }
         } catch (SQLException e) {
             System.err.println("Could not load logs: " + e.getMessage());
         }
-        return lines;
+        return logs;
+    }
+
+    private ActivityLog map(ResultSet rs) throws SQLException {
+        return new ActivityLog(
+                rs.getInt("id"),
+                rs.getInt("user_id"),
+                rs.getString("action_type"),
+                rs.getString("description"),
+                rs.getString("timestamp"));
     }
 }

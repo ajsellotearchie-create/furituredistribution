@@ -1,9 +1,6 @@
 package com.scc.dao;
 
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.SQLException;
-import java.sql.Statement;
+import java.sql.*;
 
 public class DatabaseConnection {
 
@@ -20,20 +17,21 @@ public class DatabaseConnection {
         }
 
         if (!tablesReady) {
-            createTables(conn);
+            DatabaseConnection.createTables(conn);
             tablesReady = true;
+            System.out.println("[DB] Using: " + new java.io.File("furnitureRecord.db").getAbsolutePath());
         }
         return conn;
     }
 
-    private static void createTables(Connection conn) throws SQLException {
+    public static void createTables(Connection conn) throws SQLException {
         try (Statement stmt = conn.createStatement()) {
             stmt.execute("CREATE TABLE IF NOT EXISTS Users (" +
                     "user_id INTEGER PRIMARY KEY AUTOINCREMENT, " +
                     "username TEXT UNIQUE NOT NULL, " +
                     "password TEXT NOT NULL, " +
                     "full_name TEXT NOT NULL, " +
-                    "roles TEXT NOT NULL," +
+                    "roles TEXT NOT NULL, " +
                     "status TEXT NOT NULL)");
 
             stmt.execute("CREATE TABLE IF NOT EXISTS FurnitureItems (" +
@@ -64,14 +62,30 @@ public class DatabaseConnection {
                     "FOREIGN KEY (order_id) REFERENCES DistributionOrders(order_id) ON DELETE CASCADE, " +
                     "FOREIGN KEY (item_id) REFERENCES FurnitureItems(item_id) ON DELETE CASCADE)");
 
+            migrateActivityLogs(stmt);
+
             stmt.execute("CREATE TABLE IF NOT EXISTS ActivityLogs (" +
-                    "log_id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
                     "user_id INTEGER NOT NULL, " +
-                    "event_type TEXT NOT NULL, " +
-                    "target_id INTEGER NOT NULL, " +
+                    "action_type TEXT NOT NULL, " +
                     "description TEXT NOT NULL, " +
                     "timestamp TEXT NOT NULL, " +
                     "FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE)");
+        }
+    }
+
+    // Drops the old-format ActivityLogs table (log_id/event_type/target_id) so it can be recreated
+    private static void migrateActivityLogs(Statement stmt) throws SQLException{
+        boolean hasNewSchema = false;
+        try (ResultSet rs = stmt.executeQuery("PRAGMA table_info(ActivityLogs)")) {
+            while (rs.next()) {
+                if ("action_type".equalsIgnoreCase(rs.getString("name"))) {
+                    hasNewSchema = true;
+                }
+            }
+        }
+        if (!hasNewSchema) {
+            stmt.execute("DROP TABLE IF EXISTS ActivityLogs");
         }
     }
 }

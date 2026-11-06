@@ -1,5 +1,6 @@
 package com.scc.ui;
 
+import com.scc.dao.ActivityLogDao;
 import com.scc.model.User;
 
 import java.util.Scanner;
@@ -8,6 +9,7 @@ public class WarehouseMenu {
 
     private final User user;
     private final Scanner sc;
+    private final ActivityLogDao logDao = new ActivityLogDao(); // Added to track user activities
 
     public WarehouseMenu(User user, Scanner sc) {
         this.user = user;
@@ -37,6 +39,9 @@ public class WarehouseMenu {
                     System.out.println("[Update Stock] - coming soon\n");
                     break;
                 case "3":
+                    // Added log action for database audit trail
+                    logDao.logAction(user.user_id(), "LOGOUT",
+                            "User " + user.username() + " (ID: " + user.user_id() + ") logged out.");
                     System.out.println("Logged out successfully.\n");
                     loggedIn = false;
                     break;
