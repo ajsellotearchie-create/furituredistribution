@@ -49,9 +49,13 @@ public class DatabaseConnection {
                     "user_id INTEGER NOT NULL, " +
                     "order_date TEXT NOT NULL, " +
                     "delivery_address TEXT, " +
+                    "payment_method TEXT NOT NULL DEFAULT 'Cash on Delivery', " +
                     "total_amount REAL NOT NULL DEFAULT 0, " +
                     "order_status TEXT NOT NULL DEFAULT 'Processing', " +
                     "FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE)");
+
+            // Older databases were created without payment_method, so add it if it is missing
+            migrateOrderPayment(stmt);
 
             stmt.execute("CREATE TABLE IF NOT EXISTS OrderItems (" +
                     "order_item_id INTEGER PRIMARY KEY AUTOINCREMENT, " +
@@ -74,8 +78,24 @@ public class DatabaseConnection {
         }
     }
 
+    // Adds payment_method to an existing DistributionOrders table. Old orders get 'Cash on Delivery'.
+    private static void migrateOrderPayment(Statement stmt) throws SQLException {
+        boolean hasColumn = false;
+        try (ResultSet rs = stmt.executeQuery("PRAGMA table_info(DistributionOrders)")) {
+            while (rs.next()) {
+                if ("payment_method".equalsIgnoreCase(rs.getString("name"))) {
+                    hasColumn = true;
+                }
+            }
+        }
+        if (!hasColumn) {
+            stmt.execute("ALTER TABLE DistributionOrders " +
+                    "ADD COLUMN payment_method TEXT NOT NULL DEFAULT 'Cash on Delivery'");
+        }
+    }
+
     // Drops the old-format ActivityLogs table (log_id/event_type/target_id) so it can be recreated
-    private static void migrateActivityLogs(Statement stmt) throws SQLException{
+    private static void migrateActivityLogs(Statement stmt) throws SQLException {
         boolean hasNewSchema = false;
         try (ResultSet rs = stmt.executeQuery("PRAGMA table_info(ActivityLogs)")) {
             while (rs.next()) {

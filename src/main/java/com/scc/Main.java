@@ -3,6 +3,7 @@ package com.scc;
 import com.scc.dao.UserDao;
 import com.scc.model.User;
 import com.scc.ui.AdminMenu;
+import com.scc.ui.DistributionMenu;
 import com.scc.ui.WarehouseMenu;
 
 import java.util.Scanner;
@@ -21,18 +22,13 @@ public class Main {
             String choice = sc.nextLine().trim();
 
             switch (choice) {
-                case "1":
-                    login();
-                    break;
-                case "2":
-                    register();
-                    break; // back to the top of the loop = main menu
-                case "3":
+                case "1" -> login();
+                case "2" -> register();
+                case "3" -> {
                     System.out.println("Goodbye!");
                     running = false;
-                    break;
-                default:
-                    System.out.println("Invalid option. Try again.\n");
+                }
+                default -> System.out.println("Invalid option. Try again.\n");
             }
         }
     }
@@ -66,11 +62,15 @@ public class Main {
         System.out.println("Login successful! Welcome, " + user.full_name()
                 + " (" + user.roles() + ")\n");
 
-        // roles are stored in lowercase in the database, so ignore case
-        if (user.roles().equalsIgnoreCase("admin")) {
-            new AdminMenu(user, sc).show();
-        } else {
-            new WarehouseMenu(user, sc).show();
+        // Roles may be stored in any case, and old accounts may still say "warehouse staff"
+        String role = user.roles() == null ? "" : user.roles().trim().toLowerCase();
+
+        switch (role) {
+            case "admin" -> new AdminMenu(user, sc).show();
+            case "warehouse", "warehouse staff" -> new WarehouseMenu(user, sc).show();
+            case "distribution" -> new DistributionMenu(user, sc).show();
+            default -> System.out.println("Your account has an unknown role (" + user.roles()
+                    + "). Please contact an administrator.\n");
         }
         // when a dashboard returns (logout), we land back in the main menu loop
     }
@@ -90,20 +90,13 @@ public class Main {
             return;
         }
 
-        System.out.print("Select role: ADMIN [1] | Warehouse Staff [2]: ");
-        String roleChoice = sc.nextLine().trim();
-
-        String role;
-        switch (roleChoice) {
-            case "1":
-                role = "ADMIN";
-                break;
-            case "2":
-                role = "Warehouse Staff";
-                break;
-            default:
-                role = null;
-        }
+        System.out.print("Select role: ADMIN [1] | Warehouse Staff [2] | Distribution [3]: ");
+        String role = switch (sc.nextLine().trim()) {
+            case "1" -> "ADMIN";
+            case "2" -> "WAREHOUSE";
+            case "3" -> "DISTRIBUTION";
+            default -> null;
+        };
 
         if (role == null) {
             System.out.println("Invalid role!\n");
@@ -118,6 +111,5 @@ public class Main {
         } else {
             System.out.println("(Username may already exist.)\n");
         }
-        // returns to the main menu loop automatically
     }
 }
