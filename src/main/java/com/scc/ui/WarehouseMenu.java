@@ -26,7 +26,8 @@ public class WarehouseMenu {
             System.out.println("=============================");
             System.out.println("1. View Inventory");
             System.out.println("2. Update Stock");
-            System.out.println("3. Log out");
+            System.out.println("3. Distribute Item");
+            System.out.println("4. Log out");
             System.out.print("Choose an option: ");
 
             String choice = sc.nextLine().trim();
@@ -39,6 +40,9 @@ public class WarehouseMenu {
                     System.out.println("[Update Stock] - coming soon\n");
                     break;
                 case "3":
+                        System.out.println("[Manage Distribution] - coming soon\n");
+                    break;
+                case "4":
                     // Added log action for database audit trail
                     logDao.logAction(user.user_id(), "LOGOUT",
                             "User " + user.username() + " (ID: " + user.user_id() + ") logged out.");
