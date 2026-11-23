@@ -1,6 +1,11 @@
 package com.scc.dao;
 
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 
 public class DatabaseConnection {
 
@@ -17,7 +22,7 @@ public class DatabaseConnection {
         }
 
         if (!tablesReady) {
-            DatabaseConnection.createTables(conn);
+            createTables(conn);
             tablesReady = true;
             System.out.println("[DB] Using: " + new java.io.File("furnitureRecord.db").getAbsolutePath());
         }
@@ -106,6 +111,50 @@ public class DatabaseConnection {
         }
         if (!hasNewSchema) {
             stmt.execute("DROP TABLE IF EXISTS ActivityLogs");
+        }
+    }
+
+    /**
+     * Safely deletes a user and dependent records inside a single transaction.
+     * Useful if an existing SQLite database was created before ON DELETE CASCADE existed.
+     */
+    public static boolean deleteUserSafely(int userId) throws SQLException {
+        String deleteLogsSql = "DELETE FROM ActivityLogs WHERE user_id = ?";
+        String deleteOrderItemsSql =
+                "DELETE FROM OrderItems WHERE order_id IN (SELECT order_id FROM DistributionOrders WHERE user_id = ?)";
+        String deleteOrdersSql = "DELETE FROM DistributionOrders WHERE user_id = ?";
+        String deleteUserSql = "DELETE FROM Users WHERE user_id = ?";
+
+        try (Connection conn = getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                try (PreparedStatement ps = conn.prepareStatement(deleteLogsSql)) {
+                    ps.setInt(1, userId);
+                    ps.executeUpdate();
+                }
+                try (PreparedStatement ps = conn.prepareStatement(deleteOrderItemsSql)) {
+                    ps.setInt(1, userId);
+                    ps.executeUpdate();
+                }
+                try (PreparedStatement ps = conn.prepareStatement(deleteOrdersSql)) {
+                    ps.setInt(1, userId);
+                    ps.executeUpdate();
+                }
+
+                int rowsDeleted;
+                try (PreparedStatement ps = conn.prepareStatement(deleteUserSql)) {
+                    ps.setInt(1, userId);
+                    rowsDeleted = ps.executeUpdate();
+                }
+
+                conn.commit();
+                return rowsDeleted > 0;
+            } catch (SQLException e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(true);
+            }
         }
     }
 }

@@ -100,4 +100,20 @@ public class UserDao {
             return false;
         }
     }
+
+    // Deletes a user and dependent records (logs, order items, orders) safely
+    public boolean deleteUser(int userId) {
+        try {
+            boolean deleted = DatabaseConnection.deleteUserSafely(userId);
+            if (deleted) {
+                System.out.println("User #" + userId + " deleted successfully.");
+            } else {
+                System.out.println("User #" + userId + " not found.");
+            }
+            return deleted;
+        } catch (SQLException e) {
+            System.err.println("Delete failed: " + e.getMessage());
+            return false;
+        }
+    }
 }
